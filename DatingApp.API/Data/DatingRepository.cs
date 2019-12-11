@@ -33,6 +33,20 @@ namespace DatingApp.API.Data
             return user;
         }
 
+        private async Task<IEnumerable<int>> GetUserLikes(int id, bool likers)
+        {
+            var user = await this._context.Users.Include(u => u.Likers).Include(u => u.Likees).FirstOrDefaultAsync(u => u.Id == id);
+
+            if (likers) 
+            {
+                return user.Likers.Where(u => u.LikeeId == id).Select(u => u.LikerId);
+            }
+            else
+            {
+                return user.Likees.Where(u => u.LikerId == id).Select(u => u.LikeeId);
+            }
+        }
+
         public async Task<PagedList<User>> GetUsers(UserParams userParams)
         {
             var users = this._context.Users.Include(u => u.Photos)
@@ -41,6 +55,18 @@ namespace DatingApp.API.Data
             users = users.Where(u => u.Id != userParams.UserId);
 
             users = users.Where(u => u.Gender == userParams.Gender);
+
+            if (userParams.Likers)
+            {
+                var userLikers = await GetUserLikes(userParams.UserId, userParams.Likers);
+                users = users.Where(u => userLikers.Contains(u.Id));
+            }
+
+            if ( userParams.Likees)
+            {
+                var userLikees = await GetUserLikes(userParams.UserId, userParams.Likers);
+                users = users.Where(u => userLikees.Contains(u.Id));
+            }
 
             if(userParams.MinAge != 18 || userParams.MaxAge != 99) {
                 var minDob = DateTime.Today.AddYears(-userParams.MaxAge);
@@ -78,6 +104,11 @@ namespace DatingApp.API.Data
         public async Task<Photo> GetMainPhotoForUser(int userId)
         {
             return await _context.Photos.Where(p => p.UserId == userId).FirstOrDefaultAsync(p => p.IsMain);
+        }
+
+        public async Task<Like> GetLike(int userId, int receipientId)
+        {
+            return await _context.Likes.FirstOrDefaultAsync(l => l.LikerId == userId && l.LikeeId == receipientId);
         }
     }
 }
